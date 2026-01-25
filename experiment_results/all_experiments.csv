@@ -1,0 +1,5 @@
+experiment_name,timestamp,accuracy,auc_roc,f1,f1_macro,f1_weighted
+xgboost_binning_binary_smote,2026-01-25 20:39:54,0.9149,0.9753,0.9187,,
+xgboost_binning_binary_nosmote,2026-01-25 20:39:55,0.8787,0.8635,0.4407,,
+xgboost_binning_multiclass_smote,2026-01-25 20:39:57,0.7474,0.8831,,0.7461,0.7461
+xgboost_binning_multiclass_nosmote,2026-01-25 20:39:57,0.6029,0.7466,,0.5754,0.6008
