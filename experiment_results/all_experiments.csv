@@ -1,5 +1,7 @@
 experiment_name,timestamp,accuracy,auc_roc,f1,f1_macro,f1_weighted
-xgboost_binning_binary_smote,2026-01-25 20:39:54,0.9149,0.9753,0.9187,,
-xgboost_binning_binary_nosmote,2026-01-25 20:39:55,0.8787,0.8635,0.4407,,
-xgboost_binning_multiclass_smote,2026-01-25 20:39:57,0.7474,0.8831,,0.7461,0.7461
-xgboost_binning_multiclass_nosmote,2026-01-25 20:39:57,0.6029,0.7466,,0.5754,0.6008
+xgboost_binary_smote,2026-01-25 21:48:53,0.8346,0.8631,0.4828,,
+xgboost_binary_nosmote,2026-01-25 21:49:04,0.8787,0.8635,0.4407,,
+xgboost_multiclass_smote,2026-01-25 21:49:44,0.614,0.7396,,0.6252,0.6148
+xgboost_multiclass_nosmote,2026-01-25 21:49:54,0.6029,0.7466,,0.5754,0.6008
+svm_binary_smote,2026-01-25 21:50:05,0.8309,0.8657,0.5208,,
+logreg_binary_smote,2026-01-25 21:50:48,0.7868,0.9011,0.5323,,

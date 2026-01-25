@@ -8,7 +8,7 @@ Usage:
     python explainability/explainers.py <experiment_name>
     
 Example:
-    python explainability/explainers.py xgboost_binning_binary_smote
+    python explainability/explainers.py xgboost_binary_smote
 
 This will:
 1. Import and run the specified experiment
@@ -447,8 +447,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python explainability/explainers.py xgboost_binning_binary_smote
-    python explainability/explainers.py xgboost_binning_multiclass_nosmote
+    python explainability/explainers.py xgboost_binary_smote
+    python explainability/explainers.py xgboost_multiclass_nosmote
         """
     )
     parser.add_argument(

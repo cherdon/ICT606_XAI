@@ -4,6 +4,7 @@ Preprocessing utilities for wine quality data analysis.
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Union, Optional
+from sklearn.preprocessing import RobustScaler, PowerTransformer
 
 
 def bin_column(
@@ -276,3 +277,182 @@ def load_wine_data(filepath: str, wine_type: str = 'red') -> pd.DataFrame:
     df = pd.read_csv(filepath, sep=';')
     print(f"Loaded {wine_type} wine data: {df.shape[0]} samples, {df.shape[1]} features")
     return df
+
+
+def remove_multicollinear_features(
+    df: pd.DataFrame,
+    target_column: str,
+    threshold: float = 0.8,
+    verbose: bool = True
+) -> Tuple[pd.DataFrame, List[str]]:
+    """
+    Remove features with correlation above threshold, keeping the one
+    more correlated with the target variable.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with features and target
+    target_column : str
+        Name of the target column
+    threshold : float, default 0.8
+        Correlation threshold above which to remove features
+    verbose : bool, default True
+        Whether to print information about removed features
+        
+    Returns
+    -------
+    Tuple[pd.DataFrame, List[str]]
+        - DataFrame with multicollinear features removed
+        - List of removed feature names
+    """
+    df = df.copy()
+    
+    # Get feature columns (exclude target)
+    feature_cols = [col for col in df.columns if col != target_column]
+    
+    # Calculate correlation matrix for features only
+    corr_matrix = df[feature_cols].corr().abs()
+    
+    # Calculate correlation with target (handle categorical targets)
+    target_is_numeric = pd.api.types.is_numeric_dtype(df[target_column])
+    
+    if target_is_numeric:
+        target_corr = df[feature_cols].corrwith(df[target_column]).abs()
+    else:
+        # For categorical targets, encode temporarily to compute correlation
+        from sklearn.preprocessing import LabelEncoder
+        le = LabelEncoder()
+        target_encoded = le.fit_transform(df[target_column])
+        target_series = pd.Series(target_encoded, index=df.index)
+        target_corr = df[feature_cols].corrwith(target_series).abs()
+    
+    # Find highly correlated pairs
+    removed_features = set()
+    
+    for i in range(len(feature_cols)):
+        if feature_cols[i] in removed_features:
+            continue
+        for j in range(i + 1, len(feature_cols)):
+            if feature_cols[j] in removed_features:
+                continue
+            
+            if corr_matrix.iloc[i, j] > threshold:
+                feat_i = feature_cols[i]
+                feat_j = feature_cols[j]
+                
+                # Keep the feature more correlated with target
+                if target_corr[feat_i] >= target_corr[feat_j]:
+                    to_remove = feat_j
+                    to_keep = feat_i
+                else:
+                    to_remove = feat_i
+                    to_keep = feat_j
+                
+                removed_features.add(to_remove)
+                
+                if verbose:
+                    print(f"  Removing '{to_remove}' (corr with '{to_keep}': {corr_matrix.iloc[i, j]:.3f})")
+                    print(f"    → Kept '{to_keep}' (target corr: {target_corr[to_keep]:.3f})")
+    
+    # Remove the features
+    removed_list = list(removed_features)
+    df = df.drop(columns=removed_list)
+    
+    if verbose:
+        print(f"  Total features removed: {len(removed_list)}")
+        print(f"  Remaining features: {len(df.columns) - 1}")  # -1 for target
+    
+    return df, removed_list
+
+
+def apply_yeo_johnson_transform(
+    X_train: np.ndarray,
+    X_test: np.ndarray,
+    feature_names: List[str],
+    verbose: bool = True
+) -> Tuple[np.ndarray, np.ndarray, PowerTransformer]:
+    """
+    Apply Yeo-Johnson power transformation to handle skewness.
+    Fits on training data and transforms both train and test.
+    
+    Parameters
+    ----------
+    X_train : np.ndarray
+        Training feature matrix
+    X_test : np.ndarray
+        Test feature matrix
+    feature_names : List[str]
+        Names of features (for verbose output)
+    verbose : bool, default True
+        Whether to print transformation info
+        
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray, PowerTransformer]
+        - Transformed training data
+        - Transformed test data
+        - Fitted PowerTransformer object
+    """
+    transformer = PowerTransformer(method='yeo-johnson', standardize=False)
+    
+    X_train_transformed = transformer.fit_transform(X_train)
+    X_test_transformed = transformer.transform(X_test)
+    
+    if verbose:
+        print(f"  Applied Yeo-Johnson transformation to {len(feature_names)} features")
+    
+    return X_train_transformed, X_test_transformed, transformer
+
+
+def apply_robust_scaling(
+    X_train: np.ndarray,
+    X_test: np.ndarray,
+    verbose: bool = True
+) -> Tuple[np.ndarray, np.ndarray, RobustScaler]:
+    """
+    Apply RobustScaler to features. Uses median and IQR, making it
+    robust to outliers.
+    Fits on training data and transforms both train and test.
+    
+    Parameters
+    ----------
+    X_train : np.ndarray
+        Training feature matrix
+    X_test : np.ndarray
+        Test feature matrix
+    verbose : bool, default True
+        Whether to print scaling info
+        
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray, RobustScaler]
+        - Scaled training data
+        - Scaled test data
+        - Fitted RobustScaler object
+    """
+    scaler = RobustScaler()
+    
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    if verbose:
+        print(f"  Applied RobustScaler (median/IQR-based)")
+    
+    return X_train_scaled, X_test_scaled, scaler
+
+
+def get_preprocessing_pipeline_info() -> str:
+    """
+    Return a string describing the preprocessing pipeline for documentation.
+    """
+    return """
+    Preprocessing Pipeline:
+    1. Binary target creation (quality >= 7 → Premium)
+    2. Handle missing values and duplicates
+    3. Remove multicollinear features (correlation > 0.8)
+    4. Stratified train/test split (80/20)
+    5. Yeo-Johnson transformation (fit on train)
+    6. RobustScaler (fit on train)
+    7. SMOTE oversampling (on training data only)
+    """
