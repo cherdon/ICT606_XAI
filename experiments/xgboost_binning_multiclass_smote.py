@@ -335,6 +335,7 @@ def run_experiment(verbose: bool = True) -> dict:
     return {
         'experiment_name': EXPERIMENT_NAME,
         'feature_names': feature_cols,
+        'is_binary': False,
         'results': results
     }
 

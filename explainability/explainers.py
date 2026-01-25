@@ -1,7 +1,29 @@
 """
-Shared SHAP and LIME explainability utilities for XGBoost models.
+Unified SHAP and LIME Explainability Runner
+===========================================
+
+Run explainability analysis on any experiment by providing the experiment name.
+
+Usage:
+    python explainability/explainers.py <experiment_name>
+    
+Example:
+    python explainability/explainers.py xgboost_binning_binary_smote
+
+This will:
+1. Import and run the specified experiment
+2. Generate SHAP explanations (summary, bar, waterfall plots)
+3. Generate LIME explanations for representative instances
+4. Save all outputs to: explainability_results/<experiment_name>/
 """
+import sys
 import os
+import argparse
+import importlib
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,20 +33,12 @@ from typing import List, Optional, Dict, Any
 from xgboost import XGBClassifier
 
 
+# ============================================================================
+# SHAP UTILITIES
+# ============================================================================
+
 def create_shap_explainer(model: XGBClassifier) -> shap.TreeExplainer:
-    """
-    Create a SHAP TreeExplainer for XGBoost model.
-    
-    Parameters
-    ----------
-    model : XGBClassifier
-        Trained XGBoost model
-        
-    Returns
-    -------
-    shap.TreeExplainer
-        SHAP explainer object
-    """
+    """Create a SHAP TreeExplainer for XGBoost model."""
     return shap.TreeExplainer(model)
 
 
@@ -33,23 +47,7 @@ def compute_shap_values(
     X: np.ndarray,
     feature_names: List[str]
 ) -> shap.Explanation:
-    """
-    Compute SHAP values for given data.
-    
-    Parameters
-    ----------
-    explainer : shap.TreeExplainer
-        SHAP explainer object
-    X : np.ndarray
-        Feature matrix
-    feature_names : List[str]
-        List of feature names
-        
-    Returns
-    -------
-    shap.Explanation
-        SHAP explanation object
-    """
+    """Compute SHAP values for given data."""
     shap_values = explainer(X)
     shap_values.feature_names = feature_names
     return shap_values
@@ -64,30 +62,10 @@ def plot_shap_summary(
     class_names: Optional[List[str]] = None,
     is_multiclass: bool = False
 ):
-    """
-    Create and save SHAP summary plot.
-    
-    Parameters
-    ----------
-    shap_values : shap.Explanation
-        SHAP explanation object
-    X : np.ndarray
-        Feature matrix
-    feature_names : List[str]
-        List of feature names
-    output_path : str
-        Path to save the plot
-    title : str
-        Plot title
-    class_names : List[str], optional
-        Class names for multi-class
-    is_multiclass : bool
-        Whether this is a multi-class problem
-    """
+    """Create and save SHAP summary plot."""
     plt.figure(figsize=(12, 8))
     
     if is_multiclass and class_names is not None:
-        # For multi-class, create subplot for each class
         fig, axes = plt.subplots(1, len(class_names), figsize=(6*len(class_names), 8))
         
         for idx, class_name in enumerate(class_names):
@@ -114,7 +92,7 @@ def plot_shap_summary(
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"SHAP summary plot saved to: {output_path}")
+    print(f"  Saved: {os.path.basename(output_path)}")
 
 
 def plot_shap_bar(
@@ -125,24 +103,7 @@ def plot_shap_bar(
     is_multiclass: bool = False,
     max_display: int = 11
 ):
-    """
-    Create and save SHAP bar plot (mean absolute SHAP values).
-    
-    Parameters
-    ----------
-    shap_values : shap.Explanation
-        SHAP explanation object
-    output_path : str
-        Path to save the plot
-    title : str
-        Plot title
-    class_names : List[str], optional
-        Class names for multi-class
-    is_multiclass : bool
-        Whether this is a multi-class problem
-    max_display : int
-        Maximum number of features to display
-    """
+    """Create and save SHAP bar plot (mean absolute SHAP values)."""
     if is_multiclass and class_names is not None:
         fig, axes = plt.subplots(1, len(class_names), figsize=(6*len(class_names), 8))
         
@@ -160,7 +121,7 @@ def plot_shap_bar(
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"SHAP bar plot saved to: {output_path}")
+    print(f"  Saved: {os.path.basename(output_path)}")
 
 
 def plot_shap_waterfall(
@@ -170,22 +131,7 @@ def plot_shap_waterfall(
     title: str = "SHAP Waterfall Plot",
     class_idx: Optional[int] = None
 ):
-    """
-    Create and save SHAP waterfall plot for a single instance.
-    
-    Parameters
-    ----------
-    shap_values : shap.Explanation
-        SHAP explanation object
-    instance_idx : int
-        Index of the instance to explain
-    output_path : str
-        Path to save the plot
-    title : str
-        Plot title
-    class_idx : int, optional
-        Class index for multi-class problems
-    """
+    """Create and save SHAP waterfall plot for a single instance."""
     plt.figure(figsize=(12, 8))
     
     if class_idx is not None:
@@ -197,8 +143,12 @@ def plot_shap_waterfall(
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"SHAP waterfall plot saved to: {output_path}")
+    print(f"  Saved: {os.path.basename(output_path)}")
 
+
+# ============================================================================
+# LIME UTILITIES
+# ============================================================================
 
 def create_lime_explainer(
     X_train: np.ndarray,
@@ -206,25 +156,7 @@ def create_lime_explainer(
     class_names: List[str],
     mode: str = 'classification'
 ) -> lime_tabular.LimeTabularExplainer:
-    """
-    Create a LIME explainer.
-    
-    Parameters
-    ----------
-    X_train : np.ndarray
-        Training data for LIME to sample from
-    feature_names : List[str]
-        List of feature names
-    class_names : List[str]
-        List of class names
-    mode : str
-        Either 'classification' or 'regression'
-        
-    Returns
-    -------
-    lime_tabular.LimeTabularExplainer
-        LIME explainer object
-    """
+    """Create a LIME explainer."""
     return lime_tabular.LimeTabularExplainer(
         training_data=X_train,
         feature_names=feature_names,
@@ -234,66 +166,38 @@ def create_lime_explainer(
     )
 
 
-def explain_instance_lime(
-    explainer: lime_tabular.LimeTabularExplainer,
-    model: XGBClassifier,
-    instance: np.ndarray,
-    num_features: int = 10
-) -> Any:
-    """
-    Generate LIME explanation for a single instance.
+def get_representative_instances(
+    y_test: np.ndarray,
+    y_pred: np.ndarray,
+    n_per_class: int = 1,
+    include_misclassified: bool = True
+) -> Dict[str, List[int]]:
+    """Get representative instance indices for explanation."""
+    correct_mask = y_test == y_pred
+    incorrect_mask = ~correct_mask
     
-    Parameters
-    ----------
-    explainer : lime_tabular.LimeTabularExplainer
-        LIME explainer object
-    model : XGBClassifier
-        Trained model with predict_proba method
-    instance : np.ndarray
-        Single instance to explain
-    num_features : int
-        Number of features to include in explanation
-        
-    Returns
-    -------
-    lime.explanation.Explanation
-        LIME explanation object
-    """
-    return explainer.explain_instance(
-        instance,
-        model.predict_proba,
-        num_features=num_features
-    )
-
-
-def plot_lime_explanation(
-    explanation,
-    output_path: str,
-    title: str = "LIME Explanation"
-):
-    """
-    Save LIME explanation as a figure.
+    result = {'correct': [], 'misclassified': []}
     
-    Parameters
-    ----------
-    explanation : lime.explanation.Explanation
-        LIME explanation object
-    output_path : str
-        Path to save the plot
-    title : str
-        Plot title
-    """
-    fig = explanation.as_pyplot_figure()
-    fig.suptitle(title, fontsize=14, fontweight='bold', y=1.02)
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"LIME explanation plot saved to: {output_path}")
+    unique_classes = np.unique(y_test)
+    
+    for cls in unique_classes:
+        class_correct = np.where((y_test == cls) & correct_mask)[0]
+        if len(class_correct) > 0:
+            selected = class_correct[:n_per_class].tolist()
+            result['correct'].extend(selected)
+    
+    if include_misclassified:
+        misclassified_indices = np.where(incorrect_mask)[0]
+        if len(misclassified_indices) > 0:
+            n_misclassified = min(len(unique_classes), len(misclassified_indices))
+            result['misclassified'] = misclassified_indices[:n_misclassified].tolist()
+    
+    return result
 
 
 def plot_lime_multiple_instances(
     explainer: lime_tabular.LimeTabularExplainer,
-    model: XGBClassifier,
+    model,
     X: np.ndarray,
     y: np.ndarray,
     instance_indices: List[int],
@@ -302,30 +206,7 @@ def plot_lime_multiple_instances(
     title: str = "LIME Explanations",
     num_features: int = 10
 ):
-    """
-    Create LIME explanations for multiple instances and save as subplots.
-    
-    Parameters
-    ----------
-    explainer : lime_tabular.LimeTabularExplainer
-        LIME explainer object
-    model : XGBClassifier
-        Trained model
-    X : np.ndarray
-        Feature matrix
-    y : np.ndarray
-        True labels
-    instance_indices : List[int]
-        Indices of instances to explain
-    class_names : List[str]
-        Class names
-    output_path : str
-        Path to save the plot
-    title : str
-        Plot title
-    num_features : int
-        Number of features to show
-    """
+    """Create LIME explanations for multiple instances and save as subplots."""
     n_instances = len(instance_indices)
     fig, axes = plt.subplots(1, n_instances, figsize=(7*n_instances, 6))
     
@@ -333,16 +214,16 @@ def plot_lime_multiple_instances(
         axes = [axes]
     
     for idx, (ax, inst_idx) in enumerate(zip(axes, instance_indices)):
-        explanation = explain_instance_lime(
-            explainer, model, X[inst_idx], num_features=num_features
+        explanation = explainer.explain_instance(
+            X[inst_idx],
+            model.predict_proba,
+            num_features=num_features
         )
         
-        # Get feature weights
         exp_list = explanation.as_list()
         features = [x[0] for x in exp_list]
         weights = [x[1] for x in exp_list]
         
-        # Create horizontal bar plot
         colors = ['green' if w > 0 else 'red' for w in weights]
         y_pos = np.arange(len(features))
         
@@ -351,7 +232,6 @@ def plot_lime_multiple_instances(
         ax.set_yticklabels(features, fontsize=9)
         ax.axvline(x=0, color='black', linestyle='-', linewidth=0.5)
         
-        # Get prediction
         pred = model.predict([X[inst_idx]])[0]
         true_label = y[inst_idx]
         
@@ -369,53 +249,217 @@ def plot_lime_multiple_instances(
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"LIME multi-instance plot saved to: {output_path}")
+    print(f"  Saved: {os.path.basename(output_path)}")
 
 
-def get_representative_instances(
-    y_test: np.ndarray,
-    y_pred: np.ndarray,
-    n_per_class: int = 1,
-    include_misclassified: bool = True
-) -> Dict[str, List[int]]:
+# ============================================================================
+# MAIN EXPLAINABILITY RUNNER
+# ============================================================================
+
+def run_shap_analysis(experiment_data: dict, output_dir: str):
+    """Run SHAP analysis on the experiment results."""
+    print("\n[SHAP Analysis]")
+    
+    feature_names = experiment_data['feature_names']
+    results = experiment_data['results']
+    is_binary = experiment_data.get('is_binary', True)
+    class_names = results['class_names']
+    
+    # Create SHAP explainer
+    explainer = create_shap_explainer(results['model'])
+    shap_values = compute_shap_values(explainer, results['X_test'], feature_names)
+    
+    # Summary plot
+    plot_shap_summary(
+        shap_values,
+        results['X_test'],
+        feature_names,
+        os.path.join(output_dir, "shap_summary.png"),
+        title=f"SHAP Summary - {experiment_data['experiment_name']}",
+        class_names=class_names if not is_binary else None,
+        is_multiclass=not is_binary
+    )
+    
+    # Bar plot
+    plot_shap_bar(
+        shap_values,
+        os.path.join(output_dir, "shap_bar.png"),
+        title=f"SHAP Feature Importance - {experiment_data['experiment_name']}",
+        class_names=class_names if not is_binary else None,
+        is_multiclass=not is_binary
+    )
+    
+    # Waterfall plot for a correctly predicted positive class instance
+    y_pred = results['model'].predict(results['X_test'])
+    
+    if is_binary:
+        # Find a correctly predicted premium/positive instance
+        positive_mask = (results['y_test'] == 1) & (y_pred == 1)
+        positive_indices = np.where(positive_mask)[0]
+        
+        if len(positive_indices) > 0:
+            plot_shap_waterfall(
+                shap_values,
+                positive_indices[0],
+                os.path.join(output_dir, "shap_waterfall.png"),
+                title=f"SHAP Waterfall - Positive Class Instance"
+            )
+    else:
+        # Find a correctly predicted high quality instance
+        if 'high' in class_names:
+            high_class_idx = class_names.index('high')
+        else:
+            high_class_idx = len(class_names) - 1  # Last class
+        
+        high_mask = (results['y_test'] == high_class_idx) & (y_pred == high_class_idx)
+        high_indices = np.where(high_mask)[0]
+        
+        if len(high_indices) > 0:
+            plot_shap_waterfall(
+                shap_values,
+                high_indices[0],
+                os.path.join(output_dir, "shap_waterfall.png"),
+                title=f"SHAP Waterfall - {class_names[high_class_idx]} Class Instance",
+                class_idx=high_class_idx
+            )
+    
+    return shap_values
+
+
+def run_lime_analysis(experiment_data: dict, output_dir: str):
+    """Run LIME analysis on the experiment results."""
+    print("\n[LIME Analysis]")
+    
+    feature_names = experiment_data['feature_names']
+    results = experiment_data['results']
+    class_names = results['class_names']
+    
+    # Create LIME explainer
+    lime_explainer = create_lime_explainer(
+        results['X_train'],
+        feature_names,
+        class_names
+    )
+    
+    # Get representative instances
+    y_pred = results['model'].predict(results['X_test'])
+    instances = get_representative_instances(
+        results['y_test'],
+        y_pred,
+        n_per_class=1,
+        include_misclassified=True
+    )
+    
+    # Correct predictions
+    if instances['correct']:
+        max_instances = min(3, len(instances['correct']))
+        plot_lime_multiple_instances(
+            lime_explainer,
+            results['model'],
+            results['X_test'],
+            results['y_test'],
+            instances['correct'][:max_instances],
+            class_names,
+            os.path.join(output_dir, "lime_correct.png"),
+            title=f"LIME - Correct Predictions"
+        )
+    
+    # Misclassified predictions
+    if instances['misclassified']:
+        max_instances = min(3, len(instances['misclassified']))
+        plot_lime_multiple_instances(
+            lime_explainer,
+            results['model'],
+            results['X_test'],
+            results['y_test'],
+            instances['misclassified'][:max_instances],
+            class_names,
+            os.path.join(output_dir, "lime_misclassified.png"),
+            title=f"LIME - Misclassified Predictions"
+        )
+
+
+def run_explainability(experiment_name: str):
     """
-    Get representative instance indices for explanation.
+    Run full explainability analysis on a given experiment.
     
     Parameters
     ----------
-    y_test : np.ndarray
-        True labels
-    y_pred : np.ndarray
-        Predicted labels
-    n_per_class : int
-        Number of instances per class to select
-    include_misclassified : bool
-        Whether to include misclassified instances
-        
-    Returns
-    -------
-    Dict[str, List[int]]
-        Dictionary with 'correct' and 'misclassified' instance indices
+    experiment_name : str
+        Name of the experiment file (without .py extension)
     """
-    correct_mask = y_test == y_pred
-    incorrect_mask = ~correct_mask
+    print("="*60)
+    print("EXPLAINABILITY ANALYSIS: SHAP & LIME")
+    print("="*60)
+    print(f"\nExperiment: {experiment_name}")
     
-    result = {'correct': [], 'misclassified': []}
+    # Dynamically import the experiment module
+    try:
+        experiment_module = importlib.import_module(f"experiments.{experiment_name}")
+    except ModuleNotFoundError:
+        print(f"\nError: Experiment '{experiment_name}' not found in experiments/")
+        print("Available experiments:")
+        experiments_dir = os.path.join(os.path.dirname(__file__), '..', 'experiments')
+        for f in os.listdir(experiments_dir):
+            if f.endswith('.py') and not f.startswith('_') and f != 'experiment_tracker.py':
+                print(f"  - {f[:-3]}")
+        return None
     
-    unique_classes = np.unique(y_test)
+    # Run the experiment
+    print("\n[Step 1] Running experiment...")
+    experiment_data = experiment_module.run_experiment(verbose=False)
     
-    # Get correctly classified instances per class
-    for cls in unique_classes:
-        class_correct = np.where((y_test == cls) & correct_mask)[0]
-        if len(class_correct) > 0:
-            selected = class_correct[:n_per_class].tolist()
-            result['correct'].extend(selected)
+    print(f"  Features: {experiment_data['feature_names']}")
+    print(f"  Classes: {experiment_data['results']['class_names']}")
+    print(f"  Is Binary: {experiment_data.get('is_binary', 'Unknown')}")
     
-    # Get misclassified instances
-    if include_misclassified:
-        misclassified_indices = np.where(incorrect_mask)[0]
-        if len(misclassified_indices) > 0:
-            n_misclassified = min(len(unique_classes), len(misclassified_indices))
-            result['misclassified'] = misclassified_indices[:n_misclassified].tolist()
+    # Setup output directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(script_dir, '..', 'explainability_results', experiment_name)
+    os.makedirs(output_dir, exist_ok=True)
     
-    return result
+    # Run SHAP analysis
+    print("\n[Step 2] Running SHAP analysis...")
+    run_shap_analysis(experiment_data, output_dir)
+    
+    # Run LIME analysis
+    print("\n[Step 3] Running LIME analysis...")
+    run_lime_analysis(experiment_data, output_dir)
+    
+    print("\n" + "="*60)
+    print("EXPLAINABILITY COMPLETE")
+    print("="*60)
+    print(f"\nResults saved to: {output_dir}")
+    
+    # List generated files
+    print("\nGenerated files:")
+    for f in sorted(os.listdir(output_dir)):
+        if f.endswith('.png'):
+            print(f"  - {f}")
+    
+    return experiment_data
+
+
+def main():
+    """Main entry point for command line usage."""
+    parser = argparse.ArgumentParser(
+        description='Run SHAP and LIME explainability analysis on an experiment.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    python explainability/explainers.py xgboost_binning_binary_smote
+    python explainability/explainers.py xgboost_binning_multiclass_nosmote
+        """
+    )
+    parser.add_argument(
+        'experiment_name',
+        type=str,
+        help='Name of the experiment (filename without .py extension)'
+    )
+    
+    args = parser.parse_args()
+    run_explainability(args.experiment_name)
+
+
+if __name__ == "__main__":
+    main()
