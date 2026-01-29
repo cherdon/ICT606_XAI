@@ -8,7 +8,7 @@ Usage:
     python explainability/explainers.py <experiment_name>
     
 Example:
-    python explainability/explainers.py xgboost_binning_binary_smote
+    python explainability/explainers.py xgboost_binary_smote
 
 This will:
 1. Import and run the specified experiment
@@ -37,19 +37,77 @@ from xgboost import XGBClassifier
 # SHAP UTILITIES
 # ============================================================================
 
-def create_shap_explainer(model: XGBClassifier) -> shap.TreeExplainer:
-    """Create a SHAP TreeExplainer for XGBoost model."""
-    return shap.TreeExplainer(model)
+def create_shap_explainer(model, X_background: np.ndarray = None, model_type: str = 'auto'):
+    """
+    Create appropriate SHAP explainer based on model type.
+    
+    Parameters
+    ----------
+    model : trained model
+        The model to explain
+    X_background : np.ndarray, optional
+        Background data for KernelExplainer (required for non-tree models)
+    model_type : str
+        'tree' for tree-based models, 'kernel' for others, 'auto' to detect
+        
+    Returns
+    -------
+    shap explainer object
+    """
+    if model_type == 'auto':
+        # Auto-detect model type
+        model_class_name = type(model).__name__.lower()
+        if any(name in model_class_name for name in ['xgb', 'lgb', 'catboost', 'randomforest', 'gradientboosting', 'tree']):
+            model_type = 'tree'
+        else:
+            model_type = 'kernel'
+    
+    if model_type == 'tree':
+        return shap.TreeExplainer(model)
+    else:
+        # For SVM, Logistic Regression, Neural Networks, etc.
+        if X_background is None:
+            raise ValueError("X_background is required for KernelExplainer")
+        
+        # Use a small sample of background data for efficiency (KernelExplainer is slow)
+        n_background = min(50, len(X_background))
+        background_sample = shap.sample(X_background, n_background)
+        
+        return shap.KernelExplainer(model.predict_proba, background_sample)
 
 
 def compute_shap_values(
-    explainer: shap.TreeExplainer,
+    explainer,
     X: np.ndarray,
-    feature_names: List[str]
+    feature_names: List[str],
+    is_kernel_explainer: bool = False
 ) -> shap.Explanation:
     """Compute SHAP values for given data."""
-    shap_values = explainer(X)
-    shap_values.feature_names = feature_names
+    if is_kernel_explainer:
+        # KernelExplainer returns raw array, need to wrap in Explanation
+        shap_values_raw = explainer.shap_values(X)
+        
+        # For binary classification, shap_values_raw is a list [class_0, class_1]
+        # We typically want class 1 (positive class) for binary
+        if isinstance(shap_values_raw, list):
+            # Use positive class (index 1) for binary classification
+            shap_values = shap.Explanation(
+                values=shap_values_raw[1],
+                base_values=explainer.expected_value[1] if isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value,
+                data=X,
+                feature_names=feature_names
+            )
+        else:
+            shap_values = shap.Explanation(
+                values=shap_values_raw,
+                base_values=explainer.expected_value,
+                data=X,
+                feature_names=feature_names
+            )
+    else:
+        shap_values = explainer(X)
+        shap_values.feature_names = feature_names
+    
     return shap_values
 
 
@@ -98,6 +156,7 @@ def plot_shap_summary(
 def plot_shap_bar(
     shap_values: shap.Explanation,
     output_path: str,
+    feature_names: List[str],
     title: str = "SHAP Feature Importance",
     class_names: Optional[List[str]] = None,
     is_multiclass: bool = False,
@@ -114,8 +173,28 @@ def plot_shap_bar(
         
         fig.suptitle(title, fontsize=14, fontweight='bold', y=1.02)
     else:
+        # Calculate mean absolute SHAP values manually for robustness
         plt.figure(figsize=(10, 8))
-        shap.plots.bar(shap_values, max_display=max_display, show=False)
+        
+        # Get values from Explanation object
+        if hasattr(shap_values, 'values'):
+            values = shap_values.values
+        else:
+            values = shap_values
+        
+        # Calculate mean absolute SHAP values
+        mean_abs_shap = np.abs(values).mean(axis=0)
+        
+        # Sort by importance
+        sorted_idx = np.argsort(mean_abs_shap)[::-1][:max_display]
+        sorted_values = mean_abs_shap[sorted_idx]
+        sorted_names = [feature_names[i] for i in sorted_idx]
+        
+        # Create horizontal bar plot
+        y_pos = np.arange(len(sorted_names))
+        plt.barh(y_pos, sorted_values[::-1], color='#1E88E5', alpha=0.8)
+        plt.yticks(y_pos, sorted_names[::-1])
+        plt.xlabel('mean(|SHAP value|)')
         plt.title(title, fontsize=14, fontweight='bold')
     
     plt.tight_layout()
@@ -265,14 +344,41 @@ def run_shap_analysis(experiment_data: dict, output_dir: str):
     is_binary = experiment_data.get('is_binary', True)
     class_names = results['class_names']
     
+    # Detect model type
+    model = results['model']
+    model_class_name = type(model).__name__.lower()
+    is_tree_model = any(name in model_class_name for name in ['xgb', 'lgb', 'catboost', 'randomforest', 'gradientboosting', 'tree'])
+    
+    print(f"  Model type: {type(model).__name__}")
+    print(f"  Using: {'TreeExplainer' if is_tree_model else 'KernelExplainer'}")
+    
     # Create SHAP explainer
-    explainer = create_shap_explainer(results['model'])
-    shap_values = compute_shap_values(explainer, results['X_test'], feature_names)
+    if is_tree_model:
+        explainer = create_shap_explainer(model)
+        is_kernel = False
+    else:
+        # For SVM, Logistic Regression, etc. - use KernelExplainer
+        print("  Note: KernelExplainer may take longer to compute...")
+        explainer = create_shap_explainer(model, X_background=results['X_train'], model_type='kernel')
+        is_kernel = True
+    
+    # Compute SHAP values (use subset for kernel explainer to save time)
+    if is_kernel:
+        # KernelExplainer is slow, use small subset
+        n_samples = min(20, len(results['X_test']))
+        print(f"  Computing SHAP for {n_samples} test samples (out of {len(results['X_test'])})...")
+        X_explain = results['X_test'][:n_samples]
+        y_test_subset = results['y_test'][:n_samples]
+    else:
+        X_explain = results['X_test']
+        y_test_subset = results['y_test']
+    
+    shap_values = compute_shap_values(explainer, X_explain, feature_names, is_kernel_explainer=is_kernel)
     
     # Summary plot
     plot_shap_summary(
         shap_values,
-        results['X_test'],
+        X_explain,
         feature_names,
         os.path.join(output_dir, "shap_summary.png"),
         title=f"SHAP Summary - {experiment_data['experiment_name']}",
@@ -284,17 +390,18 @@ def run_shap_analysis(experiment_data: dict, output_dir: str):
     plot_shap_bar(
         shap_values,
         os.path.join(output_dir, "shap_bar.png"),
+        feature_names=feature_names,
         title=f"SHAP Feature Importance - {experiment_data['experiment_name']}",
         class_names=class_names if not is_binary else None,
         is_multiclass=not is_binary
     )
     
     # Waterfall plot for a correctly predicted positive class instance
-    y_pred = results['model'].predict(results['X_test'])
+    y_pred = results['model'].predict(X_explain)
     
     if is_binary:
         # Find a correctly predicted premium/positive instance
-        positive_mask = (results['y_test'] == 1) & (y_pred == 1)
+        positive_mask = (y_test_subset == 1) & (y_pred == 1)
         positive_indices = np.where(positive_mask)[0]
         
         if len(positive_indices) > 0:
@@ -304,6 +411,8 @@ def run_shap_analysis(experiment_data: dict, output_dir: str):
                 os.path.join(output_dir, "shap_waterfall.png"),
                 title=f"SHAP Waterfall - Positive Class Instance"
             )
+        else:
+            print("  Warning: No correctly predicted positive instances found for waterfall plot")
     else:
         # Find a correctly predicted high quality instance
         if 'high' in class_names:
@@ -311,7 +420,7 @@ def run_shap_analysis(experiment_data: dict, output_dir: str):
         else:
             high_class_idx = len(class_names) - 1  # Last class
         
-        high_mask = (results['y_test'] == high_class_idx) & (y_pred == high_class_idx)
+        high_mask = (y_test_subset == high_class_idx) & (y_pred == high_class_idx)
         high_indices = np.where(high_mask)[0]
         
         if len(high_indices) > 0:
@@ -322,6 +431,8 @@ def run_shap_analysis(experiment_data: dict, output_dir: str):
                 title=f"SHAP Waterfall - {class_names[high_class_idx]} Class Instance",
                 class_idx=high_class_idx
             )
+        else:
+            print(f"  Warning: No correctly predicted {class_names[high_class_idx]} instances found for waterfall plot")
     
     return shap_values
 
@@ -447,8 +558,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python explainability/explainers.py xgboost_binning_binary_smote
-    python explainability/explainers.py xgboost_binning_multiclass_nosmote
+    python explainability/explainers.py xgboost_binary_smote
+    python explainability/explainers.py xgboost_multiclass_nosmote
         """
     )
     parser.add_argument(

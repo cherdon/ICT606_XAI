@@ -5,7 +5,7 @@ Usage:
     python explainability/explainers.py <experiment_name>
     
 Example:
-    python explainability/explainers.py xgboost_binning_binary_smote
+    python explainability/explainers.py xgboost_binary_smote
 """
 from explainability.explainers import run_explainability
 

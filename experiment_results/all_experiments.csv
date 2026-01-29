@@ -1,5 +1,20 @@
 experiment_name,timestamp,accuracy,auc_roc,f1,f1_macro,f1_weighted
-xgboost_binning_binary_smote,2026-01-25 20:39:54,0.9149,0.9753,0.9187,,
-xgboost_binning_binary_nosmote,2026-01-25 20:39:55,0.8787,0.8635,0.4407,,
-xgboost_binning_multiclass_smote,2026-01-25 20:39:57,0.7474,0.8831,,0.7461,0.7461
-xgboost_binning_multiclass_nosmote,2026-01-25 20:39:57,0.6029,0.7466,,0.5754,0.6008
+xgboost_binary_smote,2026-01-25 21:48:53,0.8346,0.8631,0.4828,,
+xgboost_binary_nosmote,2026-01-25 21:49:04,0.8787,0.8635,0.4407,,
+xgboost_multiclass_smote,2026-01-25 21:49:44,0.614,0.7396,,0.6252,0.6148
+xgboost_multiclass_nosmote,2026-01-25 21:49:54,0.6029,0.7466,,0.5754,0.6008
+svm_binary_smote,2026-01-25 21:50:05,0.8309,0.8657,0.5208,,
+logreg_binary_smote,2026-01-25 21:50:48,0.7868,0.9011,0.5323,,
+logreg_binary_smote_finetuned,2026-01-29 17:30:15,0.9007,0.9001,0.6667,,
+svm_binary_smote_finetuned,2026-01-29 17:30:43,0.8713,0.7953,0.5333,,
+xgboost_binary_smote_finetuned,2026-01-29 17:32:35,0.7941,0.8665,0.5333,,
+logreg_binary_smote_refined_2,2026-01-29 17:54:55,0.9044,0.9041,0.6579,,
+svm_binary_smote_refined_2,2026-01-29 17:55:17,0.8493,0.8043,0.506,,
+xgboost_binary_smote_refined_2,2026-01-29 17:55:31,0.9007,0.8845,0.5714,,
+xgboost_binary_smote_refined_3,2026-01-29 17:55:47,0.875,0.8817,0.5526,,
+logreg_binary_smote_finetuned_3,2026-01-29 20:37:43,0.9007,0.8979,0.6301,,
+logreg_binary_smote_finetuned_4,2026-01-29 20:42:48,0.9044,0.8996,0.6389,,
+svm_binary_smote_finetuned_3,2026-01-29 20:43:22,0.8456,0.8775,0.5714,,
+svm_binary_smote_finetuned_4,2026-01-29 20:43:46,0.8676,0.8216,0.561,,
+xgboost_binary_smote_finetuned_3,2026-01-29 20:44:06,0.8346,0.8884,0.5631,,
+xgboost_binary_smote_finetuned_4,2026-01-29 20:44:55,0.875,0.872,0.5405,,
