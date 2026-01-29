@@ -5,3 +5,10 @@ xgboost_multiclass_smote,2026-01-25 21:49:44,0.614,0.7396,,0.6252,0.6148
 xgboost_multiclass_nosmote,2026-01-25 21:49:54,0.6029,0.7466,,0.5754,0.6008
 svm_binary_smote,2026-01-25 21:50:05,0.8309,0.8657,0.5208,,
 logreg_binary_smote,2026-01-25 21:50:48,0.7868,0.9011,0.5323,,
+logreg_binary_smote_finetuned,2026-01-29 17:30:15,0.9007,0.9001,0.6667,,
+svm_binary_smote_finetuned,2026-01-29 17:30:43,0.8713,0.7953,0.5333,,
+xgboost_binary_smote_finetuned,2026-01-29 17:32:35,0.7941,0.8665,0.5333,,
+logreg_binary_smote_refined_2,2026-01-29 17:54:55,0.9044,0.9041,0.6579,,
+svm_binary_smote_refined_2,2026-01-29 17:55:17,0.8493,0.8043,0.506,,
+xgboost_binary_smote_refined_2,2026-01-29 17:55:31,0.9007,0.8845,0.5714,,
+xgboost_binary_smote_refined_3,2026-01-29 17:55:47,0.875,0.8817,0.5526,,
